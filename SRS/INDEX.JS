@@ -27,9 +27,9 @@ async function start() {
     const { connection, lastDisconnect, qr } = u;
 
     if (qr) {
-      console.log("\nEscanea este QR para vincular WhatsApp:\n");
+      console.log("\n📱 Escanea este QR para vincular WhatsApp:\n");
       qrcode.generate(qr, { small: true });
-      console.log("\nSi no aparece, redeploy o reinicia el Repl.\n");
+      console.log("\nSi no aparece, reinicia el Repl.\n");
     }
 
     if (connection === "close") {
@@ -64,7 +64,7 @@ async function start() {
 
 start();
 
-// ---------- Mini servidor HTTP (keep-alive para Replit/UptimeRobot)
+// ---------- Mini servidor HTTP (para Replit / uptime checks)
 import http from "http";
 const PORT = process.env.PORT || 3000;
 http
@@ -72,4 +72,20 @@ http
     res.writeHead(200, { "Content-Type": "text/plain" });
     res.end("OK");
   })
-  .listen(PORT, () => console.log("Health server ON :" + PORT));
+  .listen(PORT, () => console.log("🌐 Health server ON :" + PORT));
+
+// ---------- Auto-ping (mantiene vivo el Repl sin pagar nada)
+const HOST = process.env.REPL_SLUG && process.env.REPL_OWNER
+  ? https://${process.env.REPL_SLUG}.${process.env.REPL_OWNER}.repl.co
+  : null;
+
+if (HOST) {
+  setInterval(async () => {
+    try {
+      await fetch(HOST);
+      console.log("🔄 Auto-ping enviado a", HOST);
+    } catch (err) {
+      console.error("Error en auto-ping:", err);
+    }
+  }, 4 * 60 * 1000); // cada 4 minutos
+}
