@@ -1,19 +1,19 @@
 import { sendImages, sendPDF } from "../utils/sendFiles.js";
 
-// Estados de conversación y recordatorios
-const convoState = new Map();          // jid -> { step: 'start'|'waitingChoice'|'botiquines'|'mates' }
-const followUpTimers = new Map();      // jid -> timeoutId (para el recordatorio de 60 min)
+// Estados simples por chat
+const convoState = new Map();     // jid -> { step: 'waitingChoice'|'botiquines'|'mates' }
+const followUpTimers = new Map(); // jid -> timeoutId (recordatorio 60 min)
 
 const normalize = (txt = "") =>
   txt.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 
 function scheduleFollowUp(sock, jid, text) {
-  // limpia anterior
+  // Cancela recordatorios previos
   if (followUpTimers.has(jid)) {
     clearTimeout(followUpTimers.get(jid));
     followUpTimers.delete(jid);
   }
-  // 60 minutos
+  // Programa uno nuevo a 60 minutos
   const id = setTimeout(async () => {
     try {
       await sock.sendMessage(jid, { text });
@@ -37,11 +37,10 @@ export async function handleIncomingMessage(sock, msg) {
 
   const t = normalize(text);
 
-  // Mensaje inicial si no hay estado / saludo
+  // Saludo / inicio
   const isGreeting = /^(hola|buenas|buenos dias|buenas tardes|buenas noches|info|informacion|ayuda)/.test(
     t
   );
-
   if (!convoState.has(jid) || isGreeting) {
     convoState.set(jid, { step: "waitingChoice" });
     await sock.sendMessage(jid, {
@@ -51,13 +50,13 @@ export async function handleIncomingMessage(sock, msg) {
     return;
   }
 
-  // Si estamos esperando elección
   const state = convoState.get(jid);
+
   if (state.step === "waitingChoice") {
+    // --- Botiquines
     if (t.includes("botiquin") || t.includes("botiquines")) {
       convoState.set(jid, { step: "botiquines" });
 
-      // 1) Enviar 4 imágenes
       await sendImages(sock, jid, [
         "media/botiquines/img1.jpg",
         "media/botiquines/img2.jpg",
@@ -65,18 +64,16 @@ export async function handleIncomingMessage(sock, msg) {
         "media/botiquines/img4.jpg"
       ]);
 
-      // 2) Pregunta de cierre
       await sock.sendMessage(jid, { text: "¿Deseas realizar tu pedido de botiquines?" });
 
-      // 3) Recordatorio a los 60 min
       scheduleFollowUp(sock, jid, "¿Aún tienes interés en nuestros productos?");
       return;
     }
 
+    // --- Mates
     if (t.includes("mate") || t.includes("mates")) {
       convoState.set(jid, { step: "mates" });
 
-      // 1) Primer bloque (beneficios + categorías)
       await sock.sendMessage(jid, {
         text:
           "ENVÍO 100% GRATIS\n\nAbastece tu farmacia, tienda o despensa con más de 20 variedades de infusiones de mates:\n\n" +
@@ -86,7 +83,6 @@ export async function handleIncomingMessage(sock, msg) {
           "Medicinales\n• Matico (Refuerzo y defensas)\n• Alcachofa y Boldo (Hepático biliar)\n• Chanka Piedra (Hepático biliar)\n• 7 Frutas (Multimedicinal)\n• Alfalfa (Antianémico)\n• Linaza (Renal)\n• Stop Diabetes (Diabético)\n• Té Maternal (Maternidad)\n• Fortachón (Infantil)"
       });
 
-      // 2) Precios y condiciones
       await sock.sendMessage(jid, {
         text:
           "Cada cajita contiene 20 sobrecitos de mate.\nEnvío gratuito a partir de 40 unidades.\n\n" +
@@ -97,25 +93,21 @@ export async function handleIncomingMessage(sock, msg) {
           "Mayoristas\n• 541–1.000 cajitas → 11,80 Bs c/u"
       });
 
-      // 3) PDF del catálogo
       await sendPDF(sock, jid, "media/mates/mates.pdf", "Te comparto el catálogo en PDF.");
-
-      // 4) Pregunta de cierre
       await sock.sendMessage(jid, { text: "¿Deseas realizar tu pedido de mates?" });
 
-      // 5) Recordatorio a los 60 min
       scheduleFollowUp(sock, jid, "¿Aún tienes interés en nuestros productos?");
       return;
     }
 
-    // Si escribe otra cosa, repetimos la pregunta de elección
+    // Si escribe otra cosa:
     await sock.sendMessage(jid, {
       text: "Por favor, indícame Mates o Botiquines para enviarte la info correcta."
     });
     return;
   }
 
-  // Si llega cualquier respuesta posterior, cancelamos recordatorio pendiente
+  // Cualquier mensaje posterior: cancela recordatorio
   if (followUpTimers.has(jid)) {
     clearTimeout(followUpTimers.get(jid));
     followUpTimers.delete(jid);
