@@ -8,7 +8,7 @@ export async function sendImages(sock, jid, imagePaths = []) {
     }
     await sock.sendMessage(jid, {
       image: { url: p }
-      // Puedes agregar caption si quieres: caption: "Catálogo Botiquines"
+      // caption: "Catálogo Botiquines" // opcional
     });
   }
 }
